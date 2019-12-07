@@ -62,6 +62,9 @@ locals {
   dash_domain               = replace(var.domain_name, ".", "-")
 }
 
+data "aws_region" "current" {
+}
+
 #
 # SES Domain Verification
 #
@@ -116,26 +119,35 @@ resource "aws_ses_domain_mail_from" "main" {
   mail_from_domain = local.stripped_mail_from_domain
 }
 
+
+#
 # SPF validaton record
+#
+
 resource "aws_route53_record" "spf_mail_from" {
+  count = var.enable_spf_record ? 1 : 0
+
   zone_id = var.route53_zone_id
   name    = aws_ses_domain_mail_from.main.mail_from_domain
   type    = "TXT"
   ttl     = "600"
-  records = ["v=spf1 include:amazonses.com -all"]
+  records = var.spf_txt_record
 }
 
 resource "aws_route53_record" "spf_domain" {
+  count = var.enable_spf_record ? 1 : 0
+
   zone_id = var.route53_zone_id
   name    = var.domain_name
   type    = "TXT"
   ttl     = "600"
-  records = ["v=spf1 include:amazonses.com -all"]
+  records = var.spf_txt_record
 }
 
+
+#
 # Sending MX Record
-data "aws_region" "current" {
-}
+#
 
 resource "aws_route53_record" "mx_send_mail_from" {
   zone_id = var.route53_zone_id
@@ -145,7 +157,10 @@ resource "aws_route53_record" "mx_send_mail_from" {
   records = ["10 feedback-smtp.${data.aws_region.current.name}.amazonses.com"]
 }
 
+#
 # Receiving MX Record
+#
+
 resource "aws_route53_record" "mx_receive" {
   count   = var.enable_incoming_email ? 1 : 0
   name    = var.domain_name
@@ -158,6 +173,7 @@ resource "aws_route53_record" "mx_receive" {
 #
 # DMARC TXT Record
 #
+
 resource "aws_route53_record" "txt_dmarc" {
   zone_id = var.route53_zone_id
   name    = "_dmarc.${var.domain_name}"
@@ -185,4 +201,3 @@ resource "aws_ses_receipt_rule" "main" {
     object_key_prefix = var.receive_s3_prefix
   }
 }
-
